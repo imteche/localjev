@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "localjev",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "localjev.server"],
+      "port": 8000
+    }
+  ]
+}

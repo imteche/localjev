@@ -120,6 +120,20 @@ python examples/triage.py "The API is down and I'm losing money!!"
    argmax + dist   E[level] + dist    P(yes) + conf
 ```
 
+## Development
+
+```bash
+make install-dev   # runtime + test deps
+make test          # 15 tests, no LM Studio required (mocks the logprob backend)
+make run           # start server + dashboard
+make help          # list all tasks
+```
+
+The suite covers the engine math (distribution recovery from logprobs, expected-value
+scoring, confidence vs. entropy, type-safe off-menu fallback) and the HTTP contract
+(`/v1/systemone` Jev shape, validation errors, `/health`, dashboard) — all with LM
+Studio mocked, so `make test` runs offline.
+
 ## Layout
 
 ```
@@ -130,6 +144,8 @@ localjev/
   sdk.py        # tiny Python client + choice()/score()/noul() builders
 web/index.html  # live support-triage dashboard
 examples/triage.py
+tests/          # pytest suite (engine math + HTTP contract), LM Studio mocked
+Makefile        # make install-dev / test / run / demo / health
 ```
 
 ## Config (env vars)

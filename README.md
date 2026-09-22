@@ -167,4 +167,7 @@ Makefile        # make install-dev / test / run / demo / health
   here is to show the mechanism and contract locally.
 - Requires a model/runtime that returns token logprobs (llama.cpp GGUF models in
   LM Studio do).
-```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

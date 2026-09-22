@@ -36,9 +36,24 @@ model's own token distribution:
 
 ## Quick start
 
-**1. LM Studio** — open the **Developer** tab, load a model (any instruct GGUF,
-e.g. Llama 3.1 8B / Qwen2.5 7B), and **Start Server** (defaults to
+**1. LM Studio** — open the **Developer** tab, load a **plain instruct GGUF**
+(see model requirements below), and **Start Server** (defaults to
 `http://localhost:1234`).
+
+> ### ⚠ Model requirements (read this if you hit a logprobs error)
+>
+> LocalJev reads the probability of the *answer token*, so it needs a model that:
+> 1. **returns token logprobs** — llama.cpp **GGUF** models in LM Studio do; some
+>    MLX builds do not; and
+> 2. **is not a reasoning / "thinking" model.** Thinking models (e.g. QwQ, DeepSeek-R1
+>    distills, Qwen3 in thinking mode, phi-4-reasoning) spend their first tokens in a
+>    hidden reasoning channel, so there is *no answer token to read* — you'll get
+>    `content: ""` and `logprobs: null`, and LocalJev will tell you so.
+>
+> **Good picks:** Llama-3.x-Instruct, Qwen2.5-Instruct (non-thinking), Gemma-2-it,
+> Phi-3.5-mini, or any small instruct GGUF. The dashboard has a **model dropdown**
+> (populated from LM Studio) so you can switch models without restarting; pin one
+> server-side with `LOCALJEV_MODEL`.
 
 **2. Install + run:**
 

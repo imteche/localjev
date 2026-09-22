@@ -86,13 +86,30 @@ def first_token_logprobs(
         raise LMStudioError(f"LM Studio request failed: {exc}") from exc
 
     data = r.json()
+    answered_model = data.get("model", model)
     choice = data["choices"][0]
+    msg = choice.get("message", {}) or {}
+    emitted_text = msg.get("content") or ""
+    is_reasoning = ("reasoning_content" in msg) or (
+        emitted_text == "" and choice.get("finish_reason") == "length"
+    )
     logprobs = choice.get("logprobs") or {}
     content = logprobs.get("content") or []
     if not content:
+        if is_reasoning:
+            raise LMStudioError(
+                f"Model '{answered_model}' looks like a reasoning/'thinking' model: "
+                "its first token goes into the hidden reasoning channel, so there is "
+                "no answer token to read a probability from (empty content, no "
+                "logprobs). LocalJev needs a plain instruct model. Load a non-thinking "
+                "instruct GGUF in LM Studio (e.g. Llama-3.x-Instruct, Qwen2.5-Instruct "
+                "non-thinking, Gemma-2-it, Phi-3.5-mini) and set LOCALJEV_MODEL to it, "
+                "or disable the model's thinking mode."
+            )
         raise LMStudioError(
-            "The model did not return token logprobs. Use a model/runtime that "
-            "supports logprobs (most llama.cpp GGUF models in LM Studio do)."
+            f"Model '{answered_model}' did not return token logprobs. Use a model/"
+            "runtime that supports logprobs — llama.cpp GGUF models in LM Studio do; "
+            "some MLX builds do not. Pin one with LOCALJEV_MODEL."
         )
 
     first = content[0]

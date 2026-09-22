@@ -27,7 +27,13 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
   .dot.ok { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   .dot.bad { background: var(--danger); }
-  .tagline { color: var(--faint); font-size: 13px; margin: 6px 0 22px; font-family: var(--mono); }
+  .tagline { color: var(--faint); font-size: 13px; margin: 6px 0 16px; font-family: var(--mono); }
+  .modelbar { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+  .modelbar label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .modelbar select { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: var(--mono); max-width: 340px; }
+  .modelbar select:focus { outline: none; border-color: var(--accent-2); }
+  .modelbar .hint { font-size: 11px; color: var(--faint); }
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
@@ -93,6 +99,12 @@
     <span class="status"><span id="dot" class="dot"></span><span id="statusText">checking…</span></span>
   </header>
   <div class="tagline">unstructured state in → typed, calibrated decisions out · probabilities read from token logprobs, not generated</div>
+
+  <div class="modelbar">
+    <label for="model">Model</label>
+    <select id="model"><option>loading…</option></select>
+    <span class="hint" id="modelHint">pick a non-thinking instruct model — reasoning models return no answer-token logprobs</span>
+  </div>
 
   <div class="grid">
     <!-- INPUT -->
@@ -166,6 +178,22 @@ function chips() {
   });
 }
 
+const MODEL_KEY = "localjev.model";
+
+function populateModels(models, def) {
+  const sel = $("model");
+  sel.innerHTML = "";
+  const saved = (() => { try { return localStorage.getItem(MODEL_KEY); } catch (e) { return null; } })();
+  models.forEach(m => {
+    const o = document.createElement("option");
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  });
+  const pick = (saved && models.includes(saved)) ? saved : def;
+  if (pick) sel.value = pick;
+  sel.onchange = () => { try { localStorage.setItem(MODEL_KEY, sel.value); } catch (e) {} };
+}
+
 async function health() {
   try {
     const r = await fetch(SERVER + "/health");
@@ -173,10 +201,12 @@ async function health() {
     if (j.status === "ok") {
       $("dot").className = "dot ok";
       $("statusText").textContent = j.model;
+      populateModels(j.models || [j.model], j.model);
     } else { throw new Error(j.detail || "unavailable"); }
   } catch (e) {
     $("dot").className = "dot bad";
     $("statusText").textContent = "LM Studio not reachable";
+    $("model").innerHTML = "<option>—</option>";
   }
 }
 
@@ -252,9 +282,12 @@ async function run() {
   $("escalate").className = "escalate";
   try {
     const t0 = performance.now();
+    const model = $("model").value;
+    const body = { state, questions: QUESTIONS };
+    if (model && model !== "—") body.model = model;
     const r = await fetch(SERVER + "/v1/systemone", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state, questions: QUESTIONS }),
+      body: JSON.stringify(body),
     });
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
     const result = await r.json();

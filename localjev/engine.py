@@ -124,12 +124,12 @@ def _option_labels(criteria: Any) -> Tuple[List[str], List[str], Dict[str, str]]
 # --- Primitive evaluators -------------------------------------------------
 
 
-def eval_choice(state: str, q: Dict[str, Any]) -> Dict[str, Any]:
+def eval_choice(state: str, q: Dict[str, Any], model: Optional[str] = None) -> Dict[str, Any]:
     keys, descs, _ = _option_labels(q.get("criteria", {}))
     if not 2 <= len(keys) <= 10:
         raise ValueError("choice expects between 2 and 10 options")
     messages = _build_prompt(state, q.get("instructions", "Select the best option."), descs)
-    res = lmstudio.first_token_logprobs(messages)
+    res = lmstudio.first_token_logprobs(messages, model=model)
     dist = _distribution_over_labels(res["top"], len(keys), res["token"])
     probabilities = {keys[i]: round(dist[i], 4) for i in range(len(keys))}
     best = max(range(len(keys)), key=lambda i: dist[i])
@@ -142,14 +142,14 @@ def eval_choice(state: str, q: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def eval_noul(state: str, q: Dict[str, Any]) -> Dict[str, Any]:
+def eval_noul(state: str, q: Dict[str, Any], model: Optional[str] = None) -> Dict[str, Any]:
     crit = q.get("criteria") or {}
     # Present as a 2-option choice: 0 = false, 1 = true; noul = P(true).
     false_desc = crit.get("false", "The answer is no / false.")
     true_desc = crit.get("true", "The answer is yes / true.")
     options = [f"No — {false_desc}", f"Yes — {true_desc}"]
     messages = _build_prompt(state, q.get("instructions", "Answer the yes/no question."), options)
-    res = lmstudio.first_token_logprobs(messages)
+    res = lmstudio.first_token_logprobs(messages, model=model)
     dist = _distribution_over_labels(res["top"], 2, res["token"])
     p_true = round(dist[1], 4)
     return {
@@ -160,13 +160,13 @@ def eval_noul(state: str, q: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def eval_score(state: str, q: Dict[str, Any]) -> Dict[str, Any]:
+def eval_score(state: str, q: Dict[str, Any], model: Optional[str] = None) -> Dict[str, Any]:
     keys, descs, _ = _option_labels(q.get("criteria", []))
     if not 2 <= len(keys) <= 10:
         raise ValueError("score expects between 2 and 10 ordered levels")
     instr = q.get("instructions", "Rate against the ordered levels.")
     messages = _build_prompt(state, instr, descs)
-    res = lmstudio.first_token_logprobs(messages)
+    res = lmstudio.first_token_logprobs(messages, model=model)
     dist = _distribution_over_labels(res["top"], len(keys), res["token"])
     # Continuous score = probability-weighted expected level (like Jev's 1.05).
     score = sum(i * dist[i] for i in range(len(keys)))
@@ -196,7 +196,7 @@ def evaluate(state: str, questions: Dict[str, Any], model: Optional[str] = None)
         fn = _EVALUATORS.get(qtype)
         if fn is None:
             raise ValueError(f"question '{name}' has unknown type '{qtype}'")
-        ans = fn(state, q)
+        ans = fn(state, q, used_model)
         usage = ans.pop("_usage", {}) or {}
         in_tokens += int(usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0)
         out_tokens += int(usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0)

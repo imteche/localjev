@@ -9,6 +9,7 @@ from tests.conftest import fake_backend, probs
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(lmstudio, "resolve_model", lambda: "mock-llm")
+    monkeypatch.setattr(lmstudio, "list_models", lambda: ["mock-llm"])
     monkeypatch.setattr(
         lmstudio, "first_token_logprobs",
         fake_backend(probs(0.82, 0.13, 0.05)),
@@ -49,16 +50,30 @@ def test_missing_fields_is_422_or_400(client):
 def test_health_reports_model_when_reachable(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "model": "mock-llm", "lmstudio_url": lmstudio.BASE_URL}
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["model"] == "mock-llm"
+    assert body["models"] == ["mock-llm"]
+    assert body["lmstudio_url"] == lmstudio.BASE_URL
 
 
 def test_health_503_when_lmstudio_down(monkeypatch):
     def boom():
         raise lmstudio.LMStudioError("Could not reach LM Studio")
+    monkeypatch.setattr(lmstudio, "list_models", boom)
     monkeypatch.setattr(lmstudio, "resolve_model", boom)
     r = TestClient(server.app).get("/health")
     assert r.status_code == 503
     assert r.json()["status"] == "unavailable"
+
+
+def test_models_endpoint_lists_and_defaults(client, monkeypatch):
+    monkeypatch.setattr(lmstudio, "list_models", lambda: ["bonsai-1.7b", "muse-glimmer-30b"])
+    r = client.get("/v1/models")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["default"] == "mock-llm"
+    assert "bonsai-1.7b" in body["models"]
 
 
 def test_dashboard_served(client):

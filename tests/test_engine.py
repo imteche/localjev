@@ -83,6 +83,27 @@ def test_rejects_out_of_range_option_counts(patch_backend, qtype, n):
         (engine.eval_choice if qtype == "choice" else engine.eval_score)("s", q)
 
 
+def test_evaluate_threads_model_through_to_backend(monkeypatch):
+    # Regression: the request-level `model` must reach first_token_logprobs,
+    # not be silently dropped in favour of the first loaded model.
+    from localjev import lmstudio
+    seen = []
+
+    def fake(messages, model=None, **kwargs):
+        seen.append(model)
+        import math
+        return {"token": "1", "top": {"0": math.log(0.4), "1": math.log(0.6)},
+                "usage": {}, "model": model}
+
+    monkeypatch.setattr(lmstudio, "resolve_model", lambda: "default-model")
+    monkeypatch.setattr(lmstudio, "first_token_logprobs", fake)
+    res = engine.evaluate("s", {
+        "q": {"type": "noul", "instructions": "?", "criteria": {"true": "y", "false": "n"}},
+    }, model="pinned-model")
+    assert res["model"] == "pinned-model"
+    assert seen == ["pinned-model"]  # not "default-model"
+
+
 def test_evaluate_returns_jev_shaped_response(patch_backend):
     patch_backend(probs(0.7, 0.3), usage={"prompt_tokens": 120, "completion_tokens": 1})
     res = engine.evaluate("some ticket", {

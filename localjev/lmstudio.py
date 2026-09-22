@@ -14,6 +14,9 @@ import requests
 
 # LM Studio serves an OpenAI-compatible API here by default (Developer tab -> Start).
 BASE_URL = os.environ.get("LOCALJEV_LMSTUDIO_URL", "http://localhost:1234/v1").rstrip("/")
+# LM Studio's native REST API (same host) reports load state + model type, which
+# the OpenAI /v1/models list does not. We derive it from BASE_URL's origin.
+NATIVE_URL = BASE_URL.rsplit("/v1", 1)[0] + "/api/v0"
 _MODEL_OVERRIDE = os.environ.get("LOCALJEV_MODEL")  # optional; else auto-detected
 _HTTP_TIMEOUT = float(os.environ.get("LOCALJEV_TIMEOUT", "60"))
 
@@ -24,32 +27,78 @@ class LMStudioError(RuntimeError):
     pass
 
 
-def list_models() -> List[str]:
+def _reach_error(exc: Exception) -> "LMStudioError":
+    return LMStudioError(
+        f"Could not reach LM Studio at {BASE_URL}. Is the local server running? ({exc})"
+    )
+
+
+def model_catalog() -> List[Dict[str, str]]:
+    """Return [{id, state, type}] for every model LM Studio knows about.
+
+    Uses LM Studio's native /api/v0/models (which reports `state` and `type`) and
+    falls back to the OpenAI /v1/models list (ids only) if that isn't available.
+    """
+    try:
+        r = requests.get(f"{NATIVE_URL}/models", timeout=_HTTP_TIMEOUT)
+        r.raise_for_status()
+        rows = r.json().get("data", [])
+        if rows:
+            return [
+                {"id": m["id"], "state": m.get("state", "unknown"),
+                 "type": m.get("type", "llm")}
+                for m in rows
+            ]
+    except (requests.RequestException, ValueError, KeyError):
+        pass  # native API unavailable / older LM Studio -> fall back below
+
     try:
         r = requests.get(f"{BASE_URL}/models", timeout=_HTTP_TIMEOUT)
         r.raise_for_status()
     except requests.RequestException as exc:  # pragma: no cover - network
-        raise LMStudioError(
-            f"Could not reach LM Studio at {BASE_URL}. Is the local server running? ({exc})"
-        ) from exc
-    return [m["id"] for m in r.json().get("data", [])]
+        raise _reach_error(exc) from exc
+    return [{"id": m["id"], "state": "unknown", "type": "llm"}
+            for m in r.json().get("data", [])]
+
+
+def _is_text_llm(m: Dict[str, str]) -> bool:
+    # Exclude embeddings; vision (vlm) models usually can't emit answer-token
+    # logprobs the way we need, so we de-prioritize them too.
+    return m.get("type") not in ("embeddings", "embedding")
+
+
+def list_models() -> List[str]:
+    """Model ids suitable for decisions, loaded ones first, embeddings excluded."""
+    catalog = [m for m in model_catalog() if _is_text_llm(m)]
+    loaded = [m["id"] for m in catalog if m["state"] == "loaded"]
+    others = [m["id"] for m in catalog if m["state"] != "loaded"]
+    return loaded + others
 
 
 def resolve_model() -> str:
-    """Pick a model: env override, else the first model LM Studio has loaded."""
+    """Pick a sensible default model.
+
+    Priority: env override -> a *loaded* text LLM -> any loaded non-embedding
+    model -> first usable model in the catalog. This avoids defaulting to some
+    huge not-loaded vision model just because it happens to be listed first.
+    """
     global _cached_model
     if _MODEL_OVERRIDE:
         return _MODEL_OVERRIDE
     if _cached_model:
         return _cached_model
-    models = list_models()
-    if not models:
+
+    catalog = [m for m in model_catalog() if _is_text_llm(m)]
+    if not catalog:
         raise LMStudioError(
-            "LM Studio is running but no model is loaded. Load a model in the "
-            "Developer tab (or set LOCALJEV_MODEL)."
+            "LM Studio is reachable but has no usable (non-embedding) model. "
+            "Load a plain instruct model in the Developer tab (or set LOCALJEV_MODEL)."
         )
-    _cached_model = models[0]
-    return _cached_model
+    loaded_llms = [m for m in catalog if m["state"] == "loaded" and m["type"] == "llm"]
+    loaded_any = [m for m in catalog if m["state"] == "loaded"]
+    pick = (loaded_llms or loaded_any or catalog)[0]["id"]
+    _cached_model = pick
+    return pick
 
 
 def first_token_logprobs(

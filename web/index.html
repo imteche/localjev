@@ -180,16 +180,39 @@ function chips() {
 
 const MODEL_KEY = "localjev.model";
 
-function populateModels(models, def) {
+function populateModels(catalog, models, def) {
   const sel = $("model");
   sel.innerHTML = "";
   const saved = (() => { try { return localStorage.getItem(MODEL_KEY); } catch (e) { return null; } })();
-  models.forEach(m => {
+  // Map id -> {state, type}; catalog is optional (older servers send only ids).
+  const meta = {};
+  (catalog || []).forEach(m => { meta[m.id] = m; });
+  const list = (models && models.length) ? models : (catalog || []).map(m => m.id);
+
+  const add = (id) => {
+    const m = meta[id] || { state: "unknown", type: "llm" };
     const o = document.createElement("option");
-    o.value = m; o.textContent = m;
+    o.value = id;
+    const loaded = m.state === "loaded";
+    const tag = m.type && m.type !== "llm" ? ` [${m.type}]` : "";
+    o.textContent = `${loaded ? "● " : "○ "}${id}${tag}`;
+    o.dataset.state = m.state; o.dataset.type = m.type;
     sel.appendChild(o);
-  });
-  const pick = (saved && models.includes(saved)) ? saved : def;
+  };
+  // Group: loaded first, with a divider label.
+  const loaded = list.filter(id => (meta[id] || {}).state === "loaded");
+  const rest = list.filter(id => (meta[id] || {}).state !== "loaded");
+  if (loaded.length) {
+    const g = document.createElement("optgroup"); g.label = "Loaded in LM Studio";
+    sel.appendChild(g);
+    loaded.forEach(id => { const before = sel.children.length; add(id); g.appendChild(sel.lastChild); });
+  }
+  if (rest.length) {
+    const g = document.createElement("optgroup"); g.label = "Available (will load on first use)";
+    sel.appendChild(g);
+    rest.forEach(id => { add(id); g.appendChild(sel.lastChild); });
+  }
+  const pick = (saved && list.includes(saved)) ? saved : def;
   if (pick) sel.value = pick;
   sel.onchange = () => { try { localStorage.setItem(MODEL_KEY, sel.value); } catch (e) {} };
 }
@@ -201,7 +224,7 @@ async function health() {
     if (j.status === "ok") {
       $("dot").className = "dot ok";
       $("statusText").textContent = j.model;
-      populateModels(j.models || [j.model], j.model);
+      populateModels(j.catalog, j.models || [j.model], j.model);
     } else { throw new Error(j.detail || "unavailable"); }
   } catch (e) {
     $("dot").className = "dot bad";

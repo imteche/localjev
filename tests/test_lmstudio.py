@@ -74,6 +74,40 @@ def test_missing_logprobs_gives_actionable_error(monkeypatch):
     assert "logprobs" in str(exc.value).lower()
 
 
+def test_resolve_prefers_loaded_llm_over_first_listed(monkeypatch):
+    # Mirrors the real bug: a not-loaded vision model is listed first, but a
+    # loaded text LLM should win.
+    catalog = [
+        {"id": "muse-glimmer-30b", "state": "not-loaded", "type": "vlm"},
+        {"id": "bonsai-8b", "state": "loaded", "type": "llm"},
+        {"id": "bonsai-1.7b", "state": "loaded", "type": "llm"},
+        {"id": "text-embed", "state": "loaded", "type": "embeddings"},
+    ]
+    monkeypatch.setattr(lmstudio, "model_catalog", lambda: catalog)
+    monkeypatch.setattr(lmstudio, "_cached_model", None, raising=False)
+    monkeypatch.setattr(lmstudio, "_MODEL_OVERRIDE", None, raising=False)
+    assert lmstudio.resolve_model() == "bonsai-8b"
+
+
+def test_list_models_puts_loaded_first_and_drops_embeddings(monkeypatch):
+    catalog = [
+        {"id": "muse-glimmer-30b", "state": "not-loaded", "type": "vlm"},
+        {"id": "bonsai-8b", "state": "loaded", "type": "llm"},
+        {"id": "text-embed", "state": "loaded", "type": "embeddings"},
+    ]
+    monkeypatch.setattr(lmstudio, "model_catalog", lambda: catalog)
+    ids = lmstudio.list_models()
+    assert ids[0] == "bonsai-8b"          # loaded first
+    assert "muse-glimmer-30b" in ids      # still listed
+    assert "text-embed" not in ids        # embeddings excluded
+
+
+def test_env_override_beats_everything(monkeypatch):
+    monkeypatch.setattr(lmstudio, "_cached_model", None, raising=False)
+    monkeypatch.setattr(lmstudio, "_MODEL_OVERRIDE", "pinned", raising=False)
+    assert lmstudio.resolve_model() == "pinned"
+
+
 def test_forwards_model_in_request_payload(monkeypatch):
     captured = {}
 

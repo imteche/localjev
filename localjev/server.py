@@ -37,11 +37,11 @@ class SystemOneRequest(BaseModel):
 @app.get("/health")
 def health() -> JSONResponse:
     try:
-        models = lmstudio.list_models()
+        catalog = lmstudio.model_catalog()
         model = lmstudio.resolve_model()
         return JSONResponse(
-            {"status": "ok", "model": model, "models": models,
-             "lmstudio_url": lmstudio.BASE_URL}
+            {"status": "ok", "model": model, "models": lmstudio.list_models(),
+             "catalog": catalog, "lmstudio_url": lmstudio.BASE_URL}
         )
     except lmstudio.LMStudioError as exc:
         return JSONResponse({"status": "unavailable", "detail": str(exc)}, status_code=503)
@@ -50,9 +50,11 @@ def health() -> JSONResponse:
 @app.get("/v1/models")
 def models() -> JSONResponse:
     try:
-        return JSONResponse(
-            {"models": lmstudio.list_models(), "default": lmstudio.resolve_model()}
-        )
+        return JSONResponse({
+            "models": lmstudio.list_models(),
+            "catalog": lmstudio.model_catalog(),
+            "default": lmstudio.resolve_model(),
+        })
     except lmstudio.LMStudioError as exc:
         raise HTTPException(503, str(exc)) from exc
 

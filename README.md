@@ -51,9 +51,13 @@ model's own token distribution:
 >    `content: ""` and `logprobs: null`, and LocalJev will tell you so.
 >
 > **Good picks:** Llama-3.x-Instruct, Qwen2.5-Instruct (non-thinking), Gemma-2-it,
-> Phi-3.5-mini, or any small instruct GGUF. The dashboard has a **model dropdown**
-> (populated from LM Studio) so you can switch models without restarting; pin one
-> server-side with `LOCALJEV_MODEL`.
+> Phi-3.5-mini, or any small instruct GGUF.
+>
+> **Auto-selection:** LocalJev queries LM Studio's native `/api/v0/models` and
+> defaults to a model that is *actually loaded* and is a text LLM — it will **not**
+> silently JIT-load a huge not-loaded vision model just because it's listed first.
+> The dashboard dropdown groups **Loaded** vs **Available** models (● = loaded) so
+> you can switch without restarting; pin one server-side with `LOCALJEV_MODEL`.
 
 **2. Install + run:**
 
@@ -168,7 +172,7 @@ Makefile        # make install-dev / test / run / demo / health
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `LOCALJEV_LMSTUDIO_URL` | `http://localhost:1234/v1` | LM Studio OpenAI endpoint |
-| `LOCALJEV_MODEL` | *(auto: first loaded model)* | pin a specific model |
+| `LOCALJEV_MODEL` | *(auto: a **loaded** text LLM)* | pin a specific model |
 | `LOCALJEV_CALIB_T` | `1.0` | calibration temperature on the logits |
 | `LOCALJEV_PORT` | `8000` | LocalJev server port |
 

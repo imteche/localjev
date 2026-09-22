@@ -2,7 +2,7 @@
 PY ?= python3
 PORT ?= 8000
 
-.PHONY: help install install-dev run test demo health clean
+.PHONY: help install install-dev run test bench demo health clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -19,6 +19,9 @@ run:             ## Start the LocalJev server + dashboard (needs LM Studio runni
 
 test:            ## Run the test suite (no LM Studio required)
 	$(PY) -m pytest
+
+bench:           ## Run the System One vs LLM benchmark in the terminal (needs LM Studio)
+	$(PY) examples/benchmark_cli.py $(if $(MODEL),--model $(MODEL),) $(if $(LIMIT),--limit $(LIMIT),)
 
 demo:            ## Run the CLI triage demo against a running server
 	$(PY) examples/triage.py

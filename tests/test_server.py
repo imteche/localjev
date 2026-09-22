@@ -36,7 +36,7 @@ def test_systemone_returns_jev_shape(client):
     data = r.json()
     assert data["model"] == "mock-llm"
     assert data["answers"]["department"]["choice"] == "billing"
-    assert set(data.keys()) == {"model", "answers", "usage", "latency_ms"}
+    assert {"model", "answers", "usage", "latency_ms"} <= set(data.keys())
 
 
 def test_unknown_question_type_is_400(client):

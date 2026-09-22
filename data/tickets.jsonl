@@ -1,0 +1,24 @@
+{"id": 1, "text": "Help! My payouts have been failing for 3 days and I'm losing customers. I want a refund for this month's fees.", "department": "billing", "is_urgent": true, "wants_refund": true}
+{"id": 2, "text": "Hi, just wondering how I'd upgrade from the Team plan to Business? No rush at all.", "department": "sales", "is_urgent": false, "wants_refund": false}
+{"id": 3, "text": "The API returns a 500 on every /charges call since your deploy this morning. Production is down for us.", "department": "technical", "is_urgent": true, "wants_refund": false}
+{"id": 4, "text": "You charged me twice this month. Please refund the duplicate charge or I'll dispute it with my bank.", "department": "billing", "is_urgent": true, "wants_refund": true}
+{"id": 5, "text": "Love the product! Quick question — do you offer nonprofit or education pricing?", "department": "sales", "is_urgent": false, "wants_refund": false}
+{"id": 6, "text": "My webhook endpoint stopped receiving events yesterday. Nothing changed on my side. Can you check?", "department": "technical", "is_urgent": false, "wants_refund": false}
+{"id": 7, "text": "I was billed on the annual plan but I cancelled last week. I need that money back today.", "department": "billing", "is_urgent": true, "wants_refund": true}
+{"id": 8, "text": "Can someone walk our team through the enterprise features on a call next week?", "department": "sales", "is_urgent": false, "wants_refund": false}
+{"id": 9, "text": "Getting 'invalid API key' errors in production even though the key is correct and worked an hour ago.", "department": "technical", "is_urgent": true, "wants_refund": false}
+{"id": 10, "text": "Why is there a $49 charge I don't recognize on my latest invoice? Please explain.", "department": "billing", "is_urgent": false, "wants_refund": false}
+{"id": 11, "text": "We're evaluating three vendors and need a quote for 200 seats by Friday to finish our decision.", "department": "sales", "is_urgent": true, "wants_refund": false}
+{"id": 12, "text": "The dashboard shows a blank white screen after login on Chrome. Console has a null reference error.", "department": "technical", "is_urgent": false, "wants_refund": false}
+{"id": 13, "text": "Please cancel my subscription and refund the last payment. The tool isn't a fit for us.", "department": "billing", "is_urgent": false, "wants_refund": true}
+{"id": 14, "text": "Do you integrate with Salesforce? Trying to understand if it fits before we commit.", "department": "sales", "is_urgent": false, "wants_refund": false}
+{"id": 15, "text": "URGENT: rate limits are blocking our checkout flow during a launch. Can you raise our limit now?", "department": "technical", "is_urgent": true, "wants_refund": false}
+{"id": 16, "text": "My invoice says I'm on the $99 tier but I signed up for the $29 one. Fix the billing please.", "department": "billing", "is_urgent": false, "wants_refund": false}
+{"id": 17, "text": "Interested in a demo — we're a 50-person startup looking to switch from a competitor.", "department": "sales", "is_urgent": false, "wants_refund": false}
+{"id": 18, "text": "SDK v3.2 throws a TypeError on init in Node 20. Downgrading to v3.1 works. Blocking our release.", "department": "technical", "is_urgent": true, "wants_refund": false}
+{"id": 19, "text": "I never received a receipt for my last two payments. Can you resend the invoices?", "department": "billing", "is_urgent": false, "wants_refund": false}
+{"id": 20, "text": "What's the difference between the Pro and Enterprise plans? Trying to pick one for next quarter.", "department": "sales", "is_urgent": false, "wants_refund": false}
+{"id": 21, "text": "Two-factor auth codes aren't arriving by SMS and I'm locked out of my account. Need access asap.", "department": "technical", "is_urgent": true, "wants_refund": false}
+{"id": 22, "text": "You promised a refund three weeks ago and I still haven't received it. This is unacceptable.", "department": "billing", "is_urgent": true, "wants_refund": true}
+{"id": 23, "text": "Can I get a trial extension? We didn't finish evaluating and want to buy if it works out.", "department": "sales", "is_urgent": false, "wants_refund": false}
+{"id": 24, "text": "Exports are timing out for datasets over 10k rows. It worked fine last month. Please investigate.", "department": "technical", "is_urgent": false, "wants_refund": false}

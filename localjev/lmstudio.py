@@ -8,6 +8,7 @@ talks to LM Studio.
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -126,6 +127,7 @@ def first_token_logprobs(
         "top_logprobs": top_logprobs,
         "stream": False,
     }
+    started = time.perf_counter()
     try:
         r = requests.post(
             f"{BASE_URL}/chat/completions", json=payload, timeout=_HTTP_TIMEOUT
@@ -133,6 +135,7 @@ def first_token_logprobs(
         r.raise_for_status()
     except requests.RequestException as exc:  # pragma: no cover - network
         raise LMStudioError(f"LM Studio request failed: {exc}") from exc
+    latency_ms = (time.perf_counter() - started) * 1000.0
 
     data = r.json()
     answered_model = data.get("model", model)
@@ -173,4 +176,45 @@ def first_token_logprobs(
         "top": top,
         "usage": data.get("usage", {}),
         "model": data.get("model", model),
+        "latency_ms": latency_ms,
+    }
+
+
+def generate(
+    messages: List[Dict[str, str]],
+    *,
+    model: Optional[str] = None,
+    max_tokens: int = 256,
+    temperature: float = 0.0,
+) -> Dict[str, Any]:
+    """Free-form completion — the *baseline* path a normal LLM app would take.
+
+    Returns {text, usage, model, latency_ms}. No logprobs, no constraint; the
+    caller must parse whatever the model wrote (and cope when it isn't valid).
+    """
+    model = model or resolve_model()
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+    }
+    started = time.perf_counter()
+    try:
+        r = requests.post(
+            f"{BASE_URL}/chat/completions", json=payload, timeout=_HTTP_TIMEOUT
+        )
+        r.raise_for_status()
+    except requests.RequestException as exc:  # pragma: no cover - network
+        raise LMStudioError(f"LM Studio request failed: {exc}") from exc
+    latency_ms = (time.perf_counter() - started) * 1000.0
+
+    data = r.json()
+    msg = data["choices"][0].get("message", {}) or {}
+    return {
+        "text": msg.get("content") or "",
+        "usage": data.get("usage", {}),
+        "model": data.get("model", model),
+        "latency_ms": latency_ms,
     }

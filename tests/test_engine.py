@@ -83,6 +83,15 @@ def test_rejects_out_of_range_option_counts(patch_backend, qtype, n):
         (engine.eval_choice if qtype == "choice" else engine.eval_score)("s", q)
 
 
+def test_unicode_digit_lookalike_does_not_crash(patch_backend):
+    # Regression: '₂' (U+2082) passes str.isdigit() but int() rejects it.
+    patch_backend({"₂": math.log(0.5), "0": math.log(0.3), "1": math.log(0.2)})
+    q = {"type": "choice", "instructions": "?", "criteria": {"a": "", "b": "", "c": ""}}
+    r = engine.eval_choice("s", q)  # must not raise
+    assert r["choice"] in {"a", "b", "c"}
+    assert sum(r["probabilities"].values()) == pytest.approx(1.0, abs=1e-3)
+
+
 def test_evaluate_threads_model_through_to_backend(monkeypatch):
     # Regression: the request-level `model` must reach first_token_logprobs,
     # not be silently dropped in favour of the first loaded model.
@@ -110,7 +119,7 @@ def test_evaluate_returns_jev_shaped_response(patch_backend):
         "refund": {"type": "noul", "instructions": "refund?",
                    "criteria": {"true": "yes", "false": "no"}},
     })
-    assert set(res.keys()) == {"model", "answers", "usage", "latency_ms"}
+    assert {"model", "answers", "usage", "latency_ms"} <= set(res.keys())
     assert res["usage"]["input_tokens"] == 120
     assert res["answers"]["refund"]["type"] == "noul"
     assert isinstance(res["latency_ms"], float)

@@ -6,9 +6,12 @@ typed, calibrated decisions. Run the server first (see README), then:
 """
 from __future__ import annotations
 
+import os
 import sys
 
-from localjev.sdk import LocalJev, choice, noul, score
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from localjev.sdk import LocalJev, choice, noul, score  # noqa: E402
 
 QUESTIONS = {
     "department": choice(

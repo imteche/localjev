@@ -1,30 +1,50 @@
 # LocalJev
 
-**A self-hosted [System One](https://typesafe.ai/blog/introducing-system-one-models-and-jev) decision engine that runs on any model in [LM Studio](https://lmstudio.ai/).**
+**A local benchmark that shows *why* [System One models / Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) win — running entirely on [LM Studio](https://lmstudio.ai/).**
 
-TypeSafe's **Jev** is a hosted "System One" model — *unstructured state in, typed
-probabilistic decisions out.* Instead of generating text, it answers pre-defined
-typed questions and returns **calibrated probabilities + confidence**, with no
-hallucinated categories. LocalJev reproduces that developer experience **100%
-locally**: it speaks Jev's exact [`/v1/systemone` contract](https://docs.typesafe.ai/api.md)
-(Choice · Score · Noul) but is backed by a model you run in LM Studio.
+TypeSafe's **Jev** is a hosted "System One" model: *unstructured state in, typed
+probabilistic decisions out.* Instead of generating text it answers pre-defined
+typed questions and returns **calibrated probabilities + confidence**, fast, cheap,
+and with no hallucinated categories.
 
-### Why this isn't just "ask the LLM for JSON"
+LocalJev reproduces that developer experience **100% locally** (Jev's exact
+[`/v1/systemone` contract](https://docs.typesafe.ai/api.md): Choice · Score · Noul)
+**and then measures the advantages** by running the *same LM Studio model* two ways:
 
-Asking a model to *write* `"confidence": 0.88` gives you a made-up number. LocalJev
-instead does what a real System One model does — it reads probabilities out of the
-model's own token distribution:
+- **System One path** — constrained to a single answer-token, real probabilities read from the token **logprobs**.
+- **Free-form LLM path** — the classic approach: prompt the model to emit JSON, then parse it.
 
-1. **Real probabilities from logprobs.** Each question is compiled to a
-   single-token answer (a digit per label). LocalJev reads LM Studio's
-   `top_logprobs` for those tokens and softmaxes them into a genuine distribution
-   over the declared labels. Score returns the probability-weighted expected level
-   (e.g. `1.05`), exactly like Jev.
-2. **Type-safety by construction.** The answer can only ever be one of the labels
-   you declared — hallucinated categories are structurally impossible.
-3. **Calibration + confidence + escalation.** Confidence = `1 − normalized entropy`
-   of the distribution; a temperature-scaling knob (`LOCALJEV_CALIB_T`) tunes
-   calibration; low-confidence decisions auto-route to a human.
+On the same model, the benchmark scores both against a labeled dataset:
+
+| Metric (bonsai-8b, 8 tickets) | System One | Free-form LLM |
+|---|---|---|
+| **Accuracy** vs ground truth | **0.88** | 0.88 |
+| **Output tokens / decision** (cost driver) | **1.0** | ~20 |
+| **Calibration** — Brier (lower better) | **0.12** | 0.21 |
+| **Type-safe outputs** | **100%** | 100%* |
+| Latency / ticket | ~350 ms | ~570 ms |
+| **Projected @ 1M decisions** | **1.0M output tokens** | ~20M output tokens |
+
+\* type-safety is *guaranteed* for System One and *observed* for the baseline — weaker
+models drop below 100% (invalid JSON / hallucinated categories); System One never can.
+
+The dashboard streams these scorecards in live as it runs, with per-metric "win"
+badges and a 1M-decision cost projection.
+
+## Why the numbers come out this way
+
+- **Output-token cost.** System One emits **1 token per decision**; a free-form model
+  spends 20–150 tokens per ticket writing JSON. Output tokens are what you pay for —
+  hence the "Jevons efficiency" pitch. Jev itself charges **$0 for output tokens**.
+- **Real probabilities, not vibes.** Asking a model to *write* `"confidence": 0.9`
+  gives a made-up number. LocalJev reads the model's own token distribution from
+  `logprobs`, so the probabilities are meaningful — reflected in a **lower Brier score**.
+- **Type-safety by construction.** The answer can only ever be a declared label, so
+  invalid/hallucinated categories are structurally impossible. The baseline has to
+  parse free text and sometimes fails.
+- **Latency.** A constrained 1-token decision is cheap; a real System One model
+  (parallel sampler) is 40–200× faster than a frontier LLM per TypeSafe. Locally on one
+  llama.cpp instance the gap is smaller, but System One still usually wins wall time.
 
 ## The three primitives
 
@@ -36,28 +56,19 @@ model's own token distribution:
 
 ## Quick start
 
-**1. LM Studio** — open the **Developer** tab, load a **plain instruct GGUF**
-(see model requirements below), and **Start Server** (defaults to
-`http://localhost:1234`).
+**1. LM Studio** — Developer tab → load a **plain instruct GGUF** (see model
+requirements below) → **Start Server** (defaults to `http://localhost:1234`).
 
 > ### ⚠ Model requirements (read this if you hit a logprobs error)
->
-> LocalJev reads the probability of the *answer token*, so it needs a model that:
-> 1. **returns token logprobs** — llama.cpp **GGUF** models in LM Studio do; some
->    MLX builds do not; and
-> 2. **is not a reasoning / "thinking" model.** Thinking models (e.g. QwQ, DeepSeek-R1
->    distills, Qwen3 in thinking mode, phi-4-reasoning) spend their first tokens in a
->    hidden reasoning channel, so there is *no answer token to read* — you'll get
->    `content: ""` and `logprobs: null`, and LocalJev will tell you so.
+> LocalJev reads the probability of the *answer token*, so the model must
+> **return token logprobs** (llama.cpp **GGUF** models do; some MLX builds don't) and
+> **not be a reasoning/"thinking" model** (those spend the first tokens in a hidden
+> channel, leaving no answer token — you'll get an actionable error).
 >
 > **Good picks:** Llama-3.x-Instruct, Qwen2.5-Instruct (non-thinking), Gemma-2-it,
-> Phi-3.5-mini, or any small instruct GGUF.
->
-> **Auto-selection:** LocalJev queries LM Studio's native `/api/v0/models` and
-> defaults to a model that is *actually loaded* and is a text LLM — it will **not**
-> silently JIT-load a huge not-loaded vision model just because it's listed first.
-> The dashboard dropdown groups **Loaded** vs **Available** models (● = loaded) so
-> you can switch without restarting; pin one server-side with `LOCALJEV_MODEL`.
+> Phi-3.5-mini, or any small instruct GGUF. LocalJev auto-selects a *loaded* text LLM
+> (via LM Studio's `/api/v0/models`) and the dashboard dropdown groups Loaded vs
+> Available (● = loaded). Pin one with `LOCALJEV_MODEL`.
 
 **2. Install + run:**
 
@@ -66,8 +77,14 @@ pip install -r requirements.txt
 ./run.sh                 # or: python -m localjev.server
 ```
 
-**3. Open the dashboard** at <http://localhost:8000> and evaluate a ticket. Or hit
-the API directly:
+**3. Open the dashboard** at <http://localhost:8000>, pick a model, and hit
+**Run benchmark**. Or from the terminal:
+
+```bash
+make bench MODEL=bonsai-8b LIMIT=8     # System One vs LLM scorecard
+```
+
+## Using the decision API directly
 
 ```bash
 curl -s http://localhost:8000/v1/systemone -H 'content-type: application/json' -d '{
@@ -80,91 +97,69 @@ curl -s http://localhost:8000/v1/systemone -H 'content-type: application/json' -
 }' | python -m json.tool
 ```
 
-Response (Jev-shaped):
-
-```json
-{
-  "model": "…",
-  "answers": {
-    "department":  {"type":"choice","choice":"billing","probabilities":{"billing":0.88,"technical":0.12,"sales":0.0},"confidence":0.79},
-    "frustration": {"type":"score","score":1.05,"legend":{"0":"Calm","1":"Frustrated","2":"Very angry"},"probabilities":{"0":0.0,"1":0.95,"2":0.05},"confidence":0.83},
-    "is_urgent":   {"type":"noul","noul":0.95,"confidence":0.95}
-  },
-  "usage": {"input_tokens": 307, "output_tokens": 4},
-  "latency_ms": 214.6
-}
-```
-
-## Python SDK
-
 ```python
 from localjev.sdk import LocalJev, choice, score, noul
 
 jev = LocalJev()
-r = jev.evaluate(
-    state="You charged me twice. I want a refund now.",
-    questions={
-        "department":  choice("Which team?", {"billing":"…","technical":"…","sales":"…"}),
-        "frustration": score("How frustrated?", ["Calm","Frustrated","Very angry"]),
-        "wants_refund": noul("Refund requested?", true="asks for money back", false="no refund"),
-    },
-)
-print(r["answers"]["department"]["choice"])        # -> "billing"
-print(r["answers"]["department"]["probabilities"])  # real distribution from logprobs
+r = jev.evaluate("You charged me twice. I want a refund now.", {
+    "department":   choice("Which team?", {"billing":"…","technical":"…","sales":"…"}),
+    "frustration":  score("How frustrated?", ["Calm","Frustrated","Very angry"]),
+    "wants_refund": noul("Refund requested?", true="asks for money back", false="no refund"),
+})
+print(r["answers"]["department"]["choice"], r["answers"]["department"]["probabilities"])
 ```
 
-CLI demo over a few sample tickets:
-
-```bash
-python examples/triage.py
-python examples/triage.py "The API is down and I'm losing money!!"
-```
-
-## How it works
+## How the benchmark works
 
 ```
-  ticket text ──▶ LocalJev engine ──▶ compile each question to a 1-token
-                                       (digit-per-label) prompt
-                        │
-                        ▼
-                 LM Studio  /v1/chat/completions   (max_tokens=1, logprobs=true)
-                        │
-                        ▼
-              read top_logprobs for the label digits
-                        │
-              softmax (with calibration T) ──▶ distribution over labels
-                        │
-        ┌───────────────┼────────────────┐
-     Choice           Score             Noul
-   argmax + dist   E[level] + dist    P(yes) + conf
+  labeled tickets (data/tickets.jsonl)
+        │
+        ├──▶ System One:  each question → 1-token constrained call → logprobs → distribution
+        │
+        └──▶ Free-form:   one call → generate JSON → parse → coerce to labels
+        │
+        ▼
+  score both vs ground truth:
+    accuracy · output tokens · latency · type-safety · Brier (calibration)
+        │
+        ▼
+  stream scorecards + 1M-decision projection to the dashboard (SSE)
 ```
 
-## Development
+## Endpoints
 
-```bash
-make install-dev   # runtime + test deps
-make test          # 15 tests, no LM Studio required (mocks the logprob backend)
-make run           # start server + dashboard
-make help          # list all tasks
-```
-
-The suite covers the engine math (distribution recovery from logprobs, expected-value
-scoring, confidence vs. entropy, type-safe off-menu fallback) and the HTTP contract
-(`/v1/systemone` Jev shape, validation errors, `/health`, dashboard) — all with LM
-Studio mocked, so `make test` runs offline.
+| Route | Purpose |
+|-------|---------|
+| `POST /v1/systemone` | Jev-shaped typed decisions (Choice/Score/Noul) |
+| `POST /v1/benchmark` | streaming (SSE) System One vs free-form-LLM benchmark |
+| `GET /health`, `GET /v1/models` | LM Studio connectivity + model catalog (load state/type) |
+| `GET /` | the benchmark + triage dashboard |
 
 ## Layout
 
 ```
 localjev/
-  lmstudio.py   # the only thing that talks to LM Studio; pulls token logprobs
-  engine.py     # logprobs -> Choice / Score / Noul, calibration, confidence
-  server.py     # FastAPI: POST /v1/systemone, /health, and the dashboard
+  lmstudio.py   # only thing that talks to LM Studio: logprobs + free-form generate
+  engine.py     # System One path: logprobs -> Choice/Score/Noul, calibration, confidence
+  baseline.py   # free-form LLM path: generate JSON, parse, coerce, flag invalid
+  metrics.py    # pure scoring: Brier, accuracy, summaries, projection
+  benchmark.py  # runs both over data/tickets.jsonl, streams scorecards
+  server.py     # FastAPI: /v1/systemone, /v1/benchmark, /health, dashboard
   sdk.py        # tiny Python client + choice()/score()/noul() builders
-web/index.html  # live support-triage dashboard
-examples/triage.py
-tests/          # pytest suite (engine math + HTTP contract), LM Studio mocked
-Makefile        # make install-dev / test / run / demo / health
+web/index.html  # benchmark dashboard (+ "Try one ticket" triage tab)
+data/tickets.jsonl   # labeled dataset (department / is_urgent / wants_refund)
+examples/       # triage.py, benchmark_cli.py
+tests/          # 39 tests, LM Studio mocked (make test)
+```
+
+## Development
+
+```bash
+make install-dev
+make test          # 39 tests, no LM Studio required
+make bench         # terminal benchmark (needs LM Studio)
+make run           # server + dashboard
+make help
 ```
 
 ## Config (env vars)
@@ -172,20 +167,21 @@ Makefile        # make install-dev / test / run / demo / health
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `LOCALJEV_LMSTUDIO_URL` | `http://localhost:1234/v1` | LM Studio OpenAI endpoint |
-| `LOCALJEV_MODEL` | *(auto: a **loaded** text LLM)* | pin a specific model |
+| `LOCALJEV_MODEL` | *(auto: a loaded text LLM)* | pin a specific model |
 | `LOCALJEV_CALIB_T` | `1.0` | calibration temperature on the logits |
+| `LOCALJEV_CONCURRENCY` | `1` | parallel questions per ticket (raise only if LM Studio serves concurrently) |
 | `LOCALJEV_PORT` | `8000` | LocalJev server port |
 
 ## Notes & honesty
 
-- LocalJev is an independent, educational re-implementation of the *System One
-  developer experience*. It is **not** TypeSafe's Jev model and is not affiliated
-  with TypeSafe AI. Speed/quality depend on your local model and hardware.
-- Local calibration is only as good as the base model plus the `CALIB_T` knob —
-  Jev's advantage is a model *trained* (RLCD) for calibrated decisions. The point
-  here is to show the mechanism and contract locally.
-- Requires a model/runtime that returns token logprobs (llama.cpp GGUF models in
-  LM Studio do).
+- Independent, educational re-implementation of the *System One developer experience*
+  and a fair local benchmark of it. **Not** TypeSafe's Jev model; not affiliated with
+  TypeSafe AI. Exact numbers depend on your model and hardware.
+- The baseline is a genuine, reasonable way to use an LLM (one call, structured JSON) —
+  the comparison isn't rigged. System One's structural advantages (1-token cost,
+  guaranteed type-safety, logprob-based calibration) are what show up in the scores.
+- Jev's headline edge is a model *trained* (RLCD) and served (parallel sampler) for
+  calibrated decisions; locally we demonstrate the mechanism and contract.
 
 ## License
 
